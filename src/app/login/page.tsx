@@ -1,4 +1,5 @@
 import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
+import { InAppBrowserWarning } from "@/components/auth/InAppBrowserWarning";
 
 export default async function LoginPage({
   searchParams,
@@ -23,6 +24,8 @@ export default async function LoginPage({
           このGoogleアカウントは部の許可リストに登録されていません。管理者に連絡してください。
         </p>
       )}
+
+      <InAppBrowserWarning />
 
       <GoogleSignInButton />
     </div>
