@@ -95,7 +95,10 @@ export async function deleteFile(fileId: string) {
   revalidatePath("/");
 }
 
-export async function getDownloadUrl(fileId: string): Promise<string> {
+export async function getFileUrl(
+  fileId: string,
+  mode: "view" | "download",
+): Promise<string> {
   const supabase = await createClient();
   const {
     data: { user },
@@ -104,7 +107,7 @@ export async function getDownloadUrl(fileId: string): Promise<string> {
 
   const { data: fileRow, error } = await supabase
     .from("files")
-    .select("storage_path")
+    .select("storage_path, name")
     .eq("id", fileId)
     .single();
 
@@ -113,10 +116,14 @@ export async function getDownloadUrl(fileId: string): Promise<string> {
   const admin = createAdminClient();
   const { data, error: signError } = await admin.storage
     .from(BUCKET)
-    .createSignedUrl(fileRow.storage_path, 60);
+    .createSignedUrl(
+      fileRow.storage_path,
+      60,
+      mode === "download" ? { download: fileRow.name } : undefined,
+    );
 
   if (signError || !data) {
-    throw new Error(signError?.message ?? "ダウンロードURLの発行に失敗しました");
+    throw new Error(signError?.message ?? "URLの発行に失敗しました");
   }
 
   return data.signedUrl;

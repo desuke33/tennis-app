@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { formatBytes } from "@/lib/utils/formatBytes";
 import type { FileRow as FileRowType, CurrentUser } from "@/lib/types/domain";
-import { getDownloadUrl, deleteFile } from "@/app/actions/files";
+import { getFileUrl, deleteFile } from "@/app/actions/files";
 import { TagPicker } from "@/components/tags/TagPicker";
 import { Button } from "@/components/ui/Button";
 
@@ -17,22 +17,26 @@ export function FileRow({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const handleDownload = () => {
+  const openFile = (mode: "view" | "download") => {
     setError(null);
     // モバイルSafari等はawait後のwindow.openをポップアップとしてブロックすることがあるため、
     // クリック直後(非同期処理の前)に空のタブを開いておき、後からURLを設定する
     const newTab = window.open("", "_blank", "noopener,noreferrer");
     startTransition(async () => {
       try {
-        const url = await getDownloadUrl(file.id);
+        const url = await getFileUrl(file.id, mode);
         if (newTab) {
           newTab.location.href = url;
+          // ダウンロード時はページ遷移が起きず空タブが残るだけなので、少し待って閉じる
+          if (mode === "download") {
+            setTimeout(() => newTab.close(), 1500);
+          }
         } else {
           window.location.href = url;
         }
       } catch (e) {
         newTab?.close();
-        setError(e instanceof Error ? e.message : "ダウンロードに失敗しました");
+        setError(e instanceof Error ? e.message : "処理に失敗しました");
       }
     });
   };
@@ -60,8 +64,19 @@ export function FileRow({
       </td>
       <td className="py-2 text-right">
         <div className="flex justify-end gap-2">
-          <Button variant="secondary" onClick={handleDownload} disabled={isPending}>
-            表示/DL
+          <Button
+            variant="secondary"
+            onClick={() => openFile("view")}
+            disabled={isPending}
+          >
+            表示
+          </Button>
+          <Button
+            variant="secondary"
+            onClick={() => openFile("download")}
+            disabled={isPending}
+          >
+            DL
           </Button>
           {currentUser.role === "admin" && (
             <Button variant="danger" onClick={handleDelete} disabled={isPending}>
