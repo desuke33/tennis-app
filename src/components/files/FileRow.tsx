@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { formatBytes } from "@/lib/utils/formatBytes";
 import type { FileRow as FileRowType, CurrentUser } from "@/lib/types/domain";
 import { getFileUrl, deleteFile } from "@/app/actions/files";
-import { TagPicker } from "@/components/tags/TagPicker";
 import { Button } from "@/components/ui/Button";
 
 export function FileRow({
@@ -58,9 +57,6 @@ export function FileRow({
       <td className="max-w-[220px] truncate py-2">{file.name}</td>
       <td className="hidden py-2 text-gray-500 sm:table-cell">
         {formatBytes(file.size)}
-      </td>
-      <td className="py-2">
-        <TagPicker fileId={file.id} attachedTags={file.tags} />
       </td>
       <td className="py-2 text-right">
         <div className="flex justify-end gap-2">

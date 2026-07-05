@@ -13,14 +13,9 @@ export function FileTable({
 }) {
   const searchParams = useSearchParams();
   const folderId = searchParams.get("folder");
-  const tagIds = (searchParams.get("tags") ?? "").split(",").filter(Boolean);
 
   const filtered = files.filter((f) => {
     if (folderId && f.folder_id !== folderId) return false;
-    if (tagIds.length > 0) {
-      const fileTagIds = new Set(f.tags.map((t) => t.id));
-      if (!tagIds.every((id) => fileTagIds.has(id))) return false;
-    }
     return true;
   });
 
@@ -38,7 +33,6 @@ export function FileTable({
         <tr className="border-b text-left text-xs text-gray-500">
           <th className="py-2 font-medium">ファイル名</th>
           <th className="hidden py-2 font-medium sm:table-cell">サイズ</th>
-          <th className="py-2 font-medium">タグ</th>
           <th className="py-2 text-right font-medium">操作</th>
         </tr>
       </thead>

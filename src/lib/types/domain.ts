@@ -10,11 +10,6 @@ export interface FolderNode extends FolderRow {
   children: FolderNode[];
 }
 
-export interface TagRow {
-  id: string;
-  name: string;
-}
-
 export interface FileRow {
   id: string;
   name: string;
@@ -22,7 +17,6 @@ export interface FileRow {
   size: number;
   mime_type: string;
   created_at: string;
-  tags: TagRow[];
 }
 
 export interface CurrentUser {

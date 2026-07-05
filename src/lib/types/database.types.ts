@@ -88,40 +88,6 @@ export interface Database {
         };
         Relationships: [];
       };
-      tags: {
-        Row: {
-          id: string;
-          name: string;
-          created_by: string | null;
-          created_at: string;
-        };
-        Insert: {
-          name: string;
-          created_by?: string | null;
-        };
-        Update: {
-          name?: string;
-        };
-        Relationships: [];
-      };
-      file_tags: {
-        Row: {
-          file_id: string;
-          tag_id: string;
-          created_by: string | null;
-          created_at: string;
-        };
-        Insert: {
-          file_id: string;
-          tag_id: string;
-          created_by?: string | null;
-        };
-        Update: {
-          file_id?: string;
-          tag_id?: string;
-        };
-        Relationships: [];
-      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
