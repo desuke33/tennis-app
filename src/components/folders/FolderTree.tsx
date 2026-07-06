@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type KeyboardEvent } from "react";
+import { useMemo, useState, useTransition, type KeyboardEvent } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { FolderNode } from "@/lib/types/domain";
 import { deleteFolder, renameFolder } from "@/app/actions/folders";
@@ -11,7 +11,9 @@ function FolderTreeNode({
   selectedId,
   isAdmin,
   isPending,
+  expandedIds,
   onSelect,
+  onToggle,
   onDelete,
   onRename,
 }: {
@@ -20,12 +22,17 @@ function FolderTreeNode({
   selectedId: string | null;
   isAdmin: boolean;
   isPending: boolean;
-  onSelect: (id: string) => void;
+  expandedIds: Set<string>;
+  onSelect: (node: FolderNode) => void;
+  onToggle: (id: string) => void;
   onDelete: (node: FolderNode) => void;
   onRename: (node: FolderNode, newName: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(node.name);
+
+  const hasChildren = node.children.length > 0;
+  const isOpen = expandedIds.has(node.id);
 
   const startEditing = () => {
     setDraftName(node.name);
@@ -53,13 +60,25 @@ function FolderTreeNode({
   return (
     <li>
       <div
-        style={{ paddingLeft: `${depth * 14 + 8}px` }}
+        style={{ paddingLeft: `${depth * 14 + 4}px` }}
         className={`group flex items-center rounded ${
           selectedId === node.id
             ? "bg-blue-100 font-medium text-blue-800"
             : "text-gray-700 hover:bg-gray-100"
         }`}
       >
+        {/* 開閉トグル(子フォルダがある場合のみ) */}
+        {hasChildren ? (
+          <button
+            onClick={() => onToggle(node.id)}
+            aria-label={isOpen ? `${node.name}を閉じる` : `${node.name}を開く`}
+            className="w-5 shrink-0 py-1 text-center text-xs text-gray-400"
+          >
+            {isOpen ? "▾" : "▸"}
+          </button>
+        ) : (
+          <span className="w-5 shrink-0" />
+        )}
         {isEditing ? (
           <input
             value={draftName}
@@ -71,7 +90,7 @@ function FolderTreeNode({
           />
         ) : (
           <button
-            onClick={() => onSelect(node.id)}
+            onClick={() => onSelect(node)}
             className="flex-1 truncate py-1 text-left text-sm"
           >
             📁 {node.name}
@@ -98,7 +117,7 @@ function FolderTreeNode({
           </span>
         )}
       </div>
-      {node.children.length > 0 && (
+      {hasChildren && isOpen && (
         <ul>
           {node.children.map((child) => (
             <FolderTreeNode
@@ -108,7 +127,9 @@ function FolderTreeNode({
               selectedId={selectedId}
               isAdmin={isAdmin}
               isPending={isPending}
+              expandedIds={expandedIds}
               onSelect={onSelect}
+              onToggle={onToggle}
               onDelete={onDelete}
               onRename={onRename}
             />
@@ -117,6 +138,27 @@ function FolderTreeNode({
       )}
     </li>
   );
+}
+
+// 選択中フォルダの祖先を求める(初期表示で選択フォルダまでのパスを開いておくため)
+function collectAncestors(
+  tree: FolderNode[],
+  targetId: string | null,
+): string[] {
+  if (!targetId) return [];
+  const path: string[] = [];
+  const walk = (nodes: FolderNode[], trail: string[]): boolean => {
+    for (const node of nodes) {
+      if (node.id === targetId) {
+        path.push(...trail, node.id);
+        return true;
+      }
+      if (walk(node.children, [...trail, node.id])) return true;
+    }
+    return false;
+  };
+  walk(tree, []);
+  return path;
 }
 
 export function FolderTree({
@@ -131,11 +173,36 @@ export function FolderTree({
   const selectedId = searchParams.get("folder");
   const [isPending, startTransition] = useTransition();
 
-  const handleSelect = (id: string | null) => {
+  const initialExpanded = useMemo(
+    () => new Set(collectAncestors(tree, selectedId)),
+    // 初期表示時のみ評価(以降はユーザーの開閉操作を優先)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(initialExpanded);
+
+  const navigateTo = (id: string | null) => {
     const params = new URLSearchParams(searchParams.toString());
     if (id) params.set("folder", id);
     else params.delete("folder");
     router.push(`/?${params.toString()}`);
+  };
+
+  // フォルダ名をタップ: 選択 + 下位の階層を開く
+  const handleSelect = (node: FolderNode) => {
+    navigateTo(node.id);
+    if (node.children.length > 0) {
+      setExpandedIds((prev) => new Set(prev).add(node.id));
+    }
+  };
+
+  const handleToggle = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleDelete = (node: FolderNode) => {
@@ -148,7 +215,7 @@ export function FolderTree({
     startTransition(async () => {
       try {
         await deleteFolder(node.id);
-        if (selectedId === node.id) handleSelect(null);
+        if (selectedId === node.id) navigateTo(null);
       } catch (err) {
         alert(err instanceof Error ? err.message : "削除に失敗しました");
       }
@@ -168,7 +235,7 @@ export function FolderTree({
   return (
     <nav className="w-full">
       <button
-        onClick={() => handleSelect(null)}
+        onClick={() => navigateTo(null)}
         className={`mb-1 block w-full truncate rounded px-2 py-1 text-left text-sm ${
           !selectedId
             ? "bg-blue-100 font-medium text-blue-800"
@@ -186,7 +253,9 @@ export function FolderTree({
             selectedId={selectedId}
             isAdmin={isAdmin}
             isPending={isPending}
+            expandedIds={expandedIds}
             onSelect={handleSelect}
+            onToggle={handleToggle}
             onDelete={handleDelete}
             onRename={handleRename}
           />
