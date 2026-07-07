@@ -139,8 +139,8 @@ export function FileGallery({
 
   return (
     <>
-      {/* 3列グリッド。タイルは正方形なので、正方形のコンテナに3行がちょうど収まる */}
-      <div className="grid aspect-square content-start gap-1 overflow-y-auto grid-cols-3">
+      {/* 3列グリッド。タイルは正方形なので、縦横比6:5のコンテナで縦2.5行・横3列分だけ見える */}
+      <div className="grid aspect-[6/5] content-start gap-1 overflow-y-auto grid-cols-3">
         {visible.map((file) => {
           const thumb = thumbUrls[file.id];
           return (

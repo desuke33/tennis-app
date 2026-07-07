@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { CurrentUser, AllowedEmailRow } from "@/lib/types/domain";
 import { AllowedEmailsPanel } from "@/components/admin/AllowedEmailsPanel";
+import { HUB_URL } from "@/lib/constants";
 
 export function Header({
   currentUser,
@@ -30,7 +31,13 @@ export function Header({
       <h1 className="text-base font-semibold text-gray-900">
         テニス部ファイル管理
       </h1>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-1">
+        <a
+          href={HUB_URL}
+          className="whitespace-nowrap rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100"
+        >
+          ホーム ↗
+        </a>
         <span className="hidden text-sm text-gray-500 sm:inline">
           {currentUser.name ?? currentUser.email}
         </span>
