@@ -75,16 +75,19 @@ export function FileGallery({
     });
   };
 
-  // ダウンロード: 新しいタブを開かず、その場で保存を開始する
-  // - 保存場所を選べるブラウザ(PCのChrome/Edge等)は保存ダイアログを表示
-  // - それ以外(iPhoneのSafari、Android等)は端末のダウンロード機能で保存
-  //   (Content-Disposition: attachment のため画面遷移は起きない)
+  // ダウンロード: 保存先を毎回はっきり選ばせる。優先順位は以下の通り
+  // 1. PCなど保存ダイアログを出せるブラウザ(Chrome/Edge): ファイル保存ダイアログ
+  // 2. iPhone/Android: OS標準の共有シート(Web Share API)を開き、
+  //    「ファイル」「Google Drive」等の保存先をその場で選ばせる
+  //    (追加アプリの有無に関わらず、常に何らかの保存先が選べる)
+  // 3. それ以外: 通常のダウンロード(Content-Disposition: attachment)
   const handleDownload = (file: FileRow) => {
     setError(null);
     startTransition(async () => {
       try {
         const url = await getFileUrl(file.id, "download");
         const w = window as SaveFilePickerWindow;
+
         if (w.showSaveFilePicker) {
           try {
             const handle = await w.showSaveFilePicker({
@@ -104,9 +107,33 @@ export function FileGallery({
               closeDialog();
               return;
             }
+            // 失敗したら他の方法にフォールバック
+          }
+        }
+
+        if (navigator.share && navigator.canShare) {
+          try {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error("ダウンロードに失敗しました");
+            const blob = await res.blob();
+            const shareFile = new File([blob], file.name, {
+              type: file.mime_type || blob.type,
+            });
+            if (navigator.canShare({ files: [shareFile] })) {
+              await navigator.share({ files: [shareFile] });
+              closeDialog();
+              return;
+            }
+          } catch (err) {
+            if (err instanceof DOMException && err.name === "AbortError") {
+              // ユーザーが共有シートをキャンセルした
+              closeDialog();
+              return;
+            }
             // 失敗したら通常のダウンロードにフォールバック
           }
         }
+
         window.location.href = url;
         closeDialog();
       } catch (e) {
