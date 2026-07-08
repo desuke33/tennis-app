@@ -1,7 +1,7 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { formatBytes } from "@/lib/utils/formatBytes";
 import type { FileRow, CurrentUser } from "@/lib/types/domain";
@@ -45,10 +45,42 @@ export function FileGallery({
   const router = useRouter();
   const folderId = searchParams.get("folder");
   const [selected, setSelected] = useState<FileRow | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const visible = files.filter((f) => !folderId || f.folder_id === folderId);
+
+  const selectedIsImage = selected?.mime_type.startsWith("image/") ?? false;
+  const selectedIsPdf = selected?.mime_type.includes("pdf") ?? false;
+
+  // ダイアログを開いたとき、画像/PDFはプレビュー用の署名URLを取得する
+  // (画像はサムネイル用の署名URLをそのまま流用、PDFはその場で取得)
+  useEffect(() => {
+    if (!selected) {
+      setPreviewUrl(null);
+      return;
+    }
+    if (selectedIsImage) {
+      setPreviewUrl(thumbUrls[selected.id] ?? null);
+      return;
+    }
+    if (selectedIsPdf) {
+      let cancelled = false;
+      setPreviewUrl(null);
+      getFileUrl(selected.id, "view")
+        .then((url) => {
+          if (!cancelled) setPreviewUrl(url);
+        })
+        .catch(() => {
+          if (!cancelled) setPreviewUrl(null);
+        });
+      return () => {
+        cancelled = true;
+      };
+    }
+    setPreviewUrl(null);
+  }, [selected, selectedIsImage, selectedIsPdf, thumbUrls]);
 
   const closeDialog = () => {
     setSelected(null);
@@ -211,7 +243,7 @@ export function FileGallery({
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-xs rounded-lg bg-white p-5 shadow-xl">
+          <div className="flex max-h-[90vh] w-full max-w-sm flex-col rounded-lg bg-white p-4 shadow-xl">
             <div className="mb-1 flex items-start justify-between gap-2">
               <p className="break-all text-sm font-medium text-gray-900">
                 {selected.name}
@@ -224,22 +256,49 @@ export function FileGallery({
                 ✕
               </button>
             </div>
-            <p className="mb-4 text-xs text-gray-400">
+            <p className="mb-3 text-xs text-gray-400">
               {formatBytes(selected.size)}
             </p>
-            {thumbUrls[selected.id] && (
-              <img
-                src={thumbUrls[selected.id]}
-                alt={selected.name}
-                className="mb-4 max-h-40 w-full rounded object-contain"
-              />
-            )}
+
+            {/* プレビュー */}
+            <div className="mb-3 min-h-[8rem] flex-1 overflow-hidden rounded bg-gray-50">
+              {selectedIsImage && previewUrl ? (
+                <img
+                  src={previewUrl}
+                  alt={selected.name}
+                  className="mx-auto max-h-[55vh] w-full object-contain"
+                />
+              ) : selectedIsPdf && previewUrl ? (
+                <iframe
+                  src={previewUrl}
+                  title={selected.name}
+                  className="h-[55vh] w-full"
+                />
+              ) : selectedIsImage || selectedIsPdf ? (
+                <div className="flex h-32 items-center justify-center text-sm text-gray-400">
+                  読み込み中...
+                </div>
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center gap-1 text-gray-400">
+                  <span className="text-4xl">{fileEmoji(selected.mime_type)}</span>
+                  <span className="text-xs">
+                    プレビュー非対応。「表示」で開いてください
+                  </span>
+                </div>
+              )}
+            </div>
+
             {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
-            <div className="flex flex-col gap-2">
-              <Button onClick={() => handleView(selected)} disabled={isPending}>
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                onClick={() => handleView(selected)}
+                disabled={isPending}
+              >
                 表示
               </Button>
               <Button
+                className="flex-1"
                 variant="secondary"
                 onClick={() => handleDownload(selected)}
                 disabled={isPending}

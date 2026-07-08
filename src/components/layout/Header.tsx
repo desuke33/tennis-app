@@ -28,8 +28,9 @@ export function Header({
 
   return (
     <header className="flex items-center justify-between border-b bg-white px-4 py-3">
-      <h1 className="text-base font-semibold text-gray-900">
-        テニス部ファイル管理
+      <h1 className="truncate text-sm font-semibold text-gray-900">
+        三菱自動車硬式テニス部
+        <span className="ml-1 font-normal text-gray-400">ファイル</span>
       </h1>
       <div className="flex items-center gap-1">
         <a
