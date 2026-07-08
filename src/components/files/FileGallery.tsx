@@ -48,8 +48,16 @@ export function FileGallery({
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const [pendingAction, setPendingAction] = useState<
+    "view" | "download" | null
+  >(null);
+  const [query, setQuery] = useState("");
 
-  const visible = files.filter((f) => !folderId || f.folder_id === folderId);
+  const normalizedQuery = query.trim().toLowerCase();
+  // 検索中はフォルダを問わず全ファイルから名前で絞り込む。未入力時は今のフォルダのみ表示
+  const visible = normalizedQuery
+    ? files.filter((f) => f.name.toLowerCase().includes(normalizedQuery))
+    : files.filter((f) => !folderId || f.folder_id === folderId);
 
   const selectedIsImage = selected?.mime_type.startsWith("image/") ?? false;
   const selectedIsPdf = selected?.mime_type.includes("pdf") ?? false;
@@ -87,22 +95,35 @@ export function FileGallery({
     setError(null);
   };
 
-  // 表示: 新しいタブでファイルを開く(タップ直後にタブを確保してポップアップブロックを回避)
+  // 表示: 新しいタブでファイルを開く(タップ直後にタブを確保してポップアップブロックを回避)。
+  // URL取得中は空白(about:blank)のまま何も起きていないように見えてしまうため、
+  // タブに即座に「読み込み中」の簡易ページを書き込んでおく。
   const handleView = (file: FileRow) => {
     setError(null);
+    setPendingAction("view");
     const newTab = window.open("", "_blank", "noopener,noreferrer");
+    if (newTab) {
+      newTab.document.write(
+        '<!DOCTYPE html><meta charset="utf-8"><title>読み込み中...</title>' +
+          '<body style="margin:0;height:100vh;display:flex;align-items:center;justify-content:center;' +
+          'font-family:sans-serif;color:#888;background:#fafafa;">読み込み中...</body>',
+      );
+    }
     startTransition(async () => {
       try {
         const url = await getFileUrl(file.id, "view");
-        if (newTab) {
+        if (newTab && !newTab.closed) {
           newTab.location.href = url;
-        } else {
-          window.open(url, "_blank", "noopener,noreferrer");
+        } else if (!newTab) {
+          // ポップアップがブロックされていた場合は現在のタブで開く
+          window.location.href = url;
         }
-        closeDialog(); // 元の画面はこのまま(ポップアップだけ閉じる)
+        closeDialog();
       } catch (e) {
-        newTab?.close();
+        if (newTab && !newTab.closed) newTab.close();
         setError(e instanceof Error ? e.message : "表示に失敗しました");
+      } finally {
+        setPendingAction(null);
       }
     });
   };
@@ -115,6 +136,7 @@ export function FileGallery({
   // 3. それ以外: 通常のダウンロード(Content-Disposition: attachment)
   const handleDownload = (file: FileRow) => {
     setError(null);
+    setPendingAction("download");
     startTransition(async () => {
       try {
         const url = await getFileUrl(file.id, "download");
@@ -170,6 +192,8 @@ export function FileGallery({
         closeDialog();
       } catch (e) {
         setError(e instanceof Error ? e.message : "ダウンロードに失敗しました");
+      } finally {
+        setPendingAction(null);
       }
     });
   };
@@ -188,16 +212,34 @@ export function FileGallery({
     });
   };
 
-  if (visible.length === 0) {
-    return (
-      <p className="py-12 text-center text-sm text-gray-400">
-        ファイルがありません
-      </p>
-    );
-  }
-
   return (
     <>
+      <div className="relative mb-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="🔍 ファイル名で検索"
+          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none"
+        />
+        {query && (
+          <button
+            onClick={() => setQuery("")}
+            aria-label="検索をクリア"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        )}
+      </div>
+
+      {visible.length === 0 ? (
+        <p className="py-12 text-center text-sm text-gray-400">
+          {normalizedQuery
+            ? "一致するファイルがありません"
+            : "ファイルがありません"}
+        </p>
+      ) : (
+        <>
       {/* 3列グリッド。タイルは正方形なので、縦横比6:5のコンテナで縦2.5行・横3列分だけ見える */}
       <div className="grid aspect-[6/5] content-start gap-1 overflow-y-auto grid-cols-3">
         {visible.map((file) => {
@@ -240,6 +282,8 @@ export function FileGallery({
           );
         })}
       </div>
+        </>
+      )}
 
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -295,7 +339,7 @@ export function FileGallery({
                 onClick={() => handleView(selected)}
                 disabled={isPending}
               >
-                表示
+                {pendingAction === "view" ? "開いています..." : "表示"}
               </Button>
               <Button
                 className="flex-1"
@@ -303,7 +347,7 @@ export function FileGallery({
                 onClick={() => handleDownload(selected)}
                 disabled={isPending}
               >
-                ダウンロード
+                {pendingAction === "download" ? "保存中..." : "ダウンロード"}
               </Button>
             </div>
           </div>
